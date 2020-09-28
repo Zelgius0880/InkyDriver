@@ -16,7 +16,6 @@ abstract class InkyHAL(
     abstract fun readBusy(): Boolean
     abstract fun writeReset(high: Boolean)
     abstract fun writeDC(high: Boolean)
-    abstract fun writeChipSelect(high: Boolean)
     abstract fun writeSpi(value: Int)
     abstract fun writeSpi(value: IntArray)
 
@@ -133,78 +132,81 @@ abstract class InkyHAL(
     }
 
     private suspend fun waitBusy() = withContext(Dispatchers.IO) {
-        while (readBusy())
+        while (readBusy()){
             delay(100)
-    }
-
-    private suspend fun update(bufferA: IntArray, bufferB: IntArray, wait: Boolean = true) {
-        setup()
-
-        val (cols, rows) = resolution
-        val packedHeight = rows
-            .toShort()
-            .toByteArray(ByteOrder.LITTLE_ENDIAN)
-            .map { it.toInt() }
-            .toIntArray()
-
-        sendCommand(0x74, 0x54) // Set Analog Block Control
-        sendCommand(0x7e, 0x3b)  // Set Digital Block Control
-
-        sendCommand(0x01, *packedHeight, 0x00)  // Gate setting
-
-        sendCommand(0x03, 0x17)  // Gate Driving Voltage
-        sendCommand(0x04, 0x41, 0xAC, 0x32)  // Source Driving Voltage
-
-        sendCommand(0x3a, 0x07)  // Dummy line period
-        sendCommand(0x3b, 0x04)  // Gate line width
-        sendCommand(0x11, 0x03)  // Data entry mode setting 0x03 = X/Y increment
-
-        sendCommand(0x2c, 0x3c)  // VCOM Register, 0x3c = -1.5v?
-
-        sendCommand(0x3c, 0b00000000)
-
-        when {
-            borderColor == InkyColor.BLACK ->
-                sendCommand(0x3c, 0b00000000)  // GS Transition Define A + VSS + LUT0
-
-            borderColor == InkyColor.RED && (color == InkyColor.RED || color == InkyColor.RED_HT) ->
-                sendCommand(0x3c, 0b01110011)  // Fix Level Define A + VSH2 + LUT3
-
-            borderColor == InkyColor.YELLOW && color == InkyColor.YELLOW ->
-                sendCommand(0x3c, 0b00110011)  // GS Transition Define A + VSH2 + LUT3
-
-            else ->
-                sendCommand(0x3c, 0b00110001)  // GS Transition Define A + VSH2 + LUT1
-
-        }
-
-        if (color == InkyColor.YELLOW)
-            sendCommand(0x04, 0x07, 0xAC, 0x32)  // Set voltage of VSH and VSL
-        if ((color == InkyColor.RED || color == InkyColor.RED_HT) && resolution == 400 to 300)
-            sendCommand(0x04, 0x30, 0xAC, 0x22)
-
-        sendCommand(0x32, *luts[color] ?: error("LUT for $color is NULL"))  // Set LUTs
-
-        sendCommand(0x44, 0x00, (cols / 8) - 1)  // Set RAM X Start/End
-        sendCommand(0x45, 0x00, 0x00, *packedHeight)  // Set RAM Y Start/End
-
-        // 0x24 == RAM B/W, 0x26 == RAM Red/Yellow/etc
-        arrayOf(0x24 to bufferA, 0x26 to bufferB).forEach {
-            val (cmd, buf) = it
-            sendCommand(0x4e, 0x00)  // Set RAM X Pointer Start
-            sendCommand(0x4f, 0x00, 0x00)  // Set RAM Y Pointer Start
-            sendCommand(cmd, *buf)
-        }
-
-        sendCommand(0x22, 0xC7)  // Display Update Sequence
-        sendCommand(0x20)  // Trigger Display Update
-        delay(50)
-
-        if (wait) {
-            waitBusy()
-            sendCommand(0x10, 0x01)  // Enter Deep Sleep
+            println("waiting")
         }
     }
+
+    private suspend fun update(bufferA: IntArray, bufferB: IntArray, wait: Boolean = true) =
+        withContext(Dispatchers.IO) {
+            setup()
+
+            val (cols, rows) = resolution
+            val packedHeight = rows
+                .toShort()
+                .toByteArray(ByteOrder.LITTLE_ENDIAN)
+                .map { it.toInt() }
+                .toIntArray()
+
+            sendCommand(0x74, 0x54) // Set Analog Block Control
+            sendCommand(0x7e, 0x3b)  // Set Digital Block Control
+
+            sendCommand(0x01, *packedHeight, 0x00)  // Gate setting
+
+            sendCommand(0x03, 0x17)  // Gate Driving Voltage
+            sendCommand(0x04, 0x41, 0xAC, 0x32)  // Source Driving Voltage
+
+            sendCommand(0x3a, 0x07)  // Dummy line period
+            sendCommand(0x3b, 0x04)  // Gate line width
+            sendCommand(0x11, 0x03)  // Data entry mode setting 0x03 = X/Y increment
+
+            sendCommand(0x2c, 0x3c)  // VCOM Register, 0x3c = -1.5v?
+
+            sendCommand(0x3c, 0b00000000)
+
+            when {
+                borderColor == InkyColor.BLACK ->
+                    sendCommand(0x3c, 0b00000000)  // GS Transition Define A + VSS + LUT0
+
+                borderColor == InkyColor.RED && (color == InkyColor.RED || color == InkyColor.RED_HT) ->
+                    sendCommand(0x3c, 0b01110011)  // Fix Level Define A + VSH2 + LUT3
+
+                borderColor == InkyColor.YELLOW && color == InkyColor.YELLOW ->
+                    sendCommand(0x3c, 0b00110011)  // GS Transition Define A + VSH2 + LUT3
+
+                else ->
+                    sendCommand(0x3c, 0b00110001)  // GS Transition Define A + VSH2 + LUT1
+
+            }
+
+            if (color == InkyColor.YELLOW)
+                sendCommand(0x04, 0x07, 0xAC, 0x32)  // Set voltage of VSH and VSL
+            if ((color == InkyColor.RED || color == InkyColor.RED_HT) && resolution == 400 to 300)
+                sendCommand(0x04, 0x30, 0xAC, 0x22)
+
+            sendCommand(0x32, *luts[color] ?: error("LUT for $color is NULL"))  // Set LUTs
+
+            sendCommand(0x44, 0x00, (cols / 8) - 1)  // Set RAM X Start/End
+            sendCommand(0x45, 0x00, 0x00, *packedHeight)  // Set RAM Y Start/End
+
+            // 0x24 == RAM B/W, 0x26 == RAM Red/Yellow/etc
+            arrayOf(0x24 to bufferA, 0x26 to bufferB).forEach {
+                val (cmd, buf) = it
+                sendCommand(0x4e, 0x00)  // Set RAM X Pointer Start
+                sendCommand(0x4f, 0x00, 0x00)  // Set RAM Y Pointer Start
+                sendCommand(cmd, *buf)
+            }
+
+            sendCommand(0x22, 0xC7)  // Display Update Sequence
+            sendCommand(0x20)  // Trigger Display Update
+            delay(50)
+
+            if (wait) {
+                waitBusy()
+                sendCommand(0x10, 0x01)  // Enter Deep Sleep
+            }
+        }
 
     fun setPixel(x: Int, y: Int, v: InkyColor) {
         buffer[x][y] = v.code

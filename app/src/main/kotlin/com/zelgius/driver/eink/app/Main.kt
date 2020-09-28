@@ -1,8 +1,12 @@
 package com.zelgius.driver.eink.app
 
 import com.zelgius.driver.eink.InkyColor
+import com.zelgius.driver.eink.WHatHAL
 import com.zelgius.driver.eink.output
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import mhashim6.pi4k.digitalInput
+import mhashim6.pi4k.digitalOutput
 import org.test.si4432.RPi3GPIO
 import java.awt.BasicStroke
 import java.awt.Color
@@ -14,10 +18,55 @@ import kotlin.random.Random
 
 
 fun main() {
+    //img.output
+
+    runBlocking {
+        println(
+            """
+            **************************
+            *   Starting to display  *
+            ************************** 
+        """.trimIndent()
+        )
+
+
+        val dc = digitalOutput(RPi3GPIO.GPIO_22)
+        drawToScreen(
+            WHatHALPi4J(
+                busy = digitalInput(RPi3GPIO.GPIO_5),
+                reset = digitalOutput(RPi3GPIO.GPIO_16),
+                dc = dc,
+                color = InkyColor.RED_HT
+            )
+        )
+
+        println("Done screen 1")
+/*        delay(17000)
+
+        println("Begin screen 2")
+        drawToScreen(
+            WHatHALPi4J(
+                busy = digitalInput(RPi3GPIO.GPIO_5),
+                reset = digitalOutput(RPi3GPIO.GPIO_16),
+                dc = dc,
+                cs = digitalOutput(RPi3GPIO.GPIO_20),
+                color = InkyColor.RED_HT
+            )
+        )*/
+
+        /*WHatHALDummy(
+            color = InkyColor.RED
+        ).setImage(img)*/
+    }
+
+
+}
+
+private suspend fun drawToScreen(driver: WHatHALPi4J) {
     val bufferedImage = BufferedImage(400, 300, BufferedImage.TYPE_INT_RGB)
     with(bufferedImage.createGraphics()) {
         paint = Color.getColor("InkyBlack", 1)
-        fillRect(0,0,400,300)
+        fillRect(0, 0, 400, 300)
 
 
         paint = Color.getColor("InkyWhite", 0)
@@ -25,14 +74,16 @@ fun main() {
         drawRect(
             Random.nextInt(10, 290),
             Random.nextInt(10, 190),
-            100, 100)
+            100, 100
+        )
 
         paint = Color.getColor("InkyRed", 2)
         stroke = BasicStroke(10f)
         drawOval(
             Random.nextInt(10, 290),
             Random.nextInt(10, 190),
-            100, 100)
+            100, 100
+        )
     }
 
     val array = when (val b = bufferedImage.data.dataBuffer) {
@@ -50,29 +101,7 @@ fun main() {
 
         }
     }
-    //img.output()
-
-    runBlocking {
-        println("""
-            **************************
-            *   Starting to display  *
-            ************************** 
-        """.trimIndent())
-        WHatHALPi4J(
-            busy = RPi3GPIO.GPIO_17,
-            reset = RPi3GPIO.GPIO_27,
-            dc = RPi3GPIO.GPIO_22,
-            cs = RPi3GPIO.GPIO_8,
-            color = InkyColor.RED_HT
-
-        ).setImage(img)
-
-        /*WHatHALDummy(
-            color = InkyColor.RED
-        ).setImage(img)*/
-    }
-
-
+    driver.setImage(img)
 }
 
 

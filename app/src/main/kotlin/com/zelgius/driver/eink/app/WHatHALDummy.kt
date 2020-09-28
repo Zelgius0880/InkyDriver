@@ -32,8 +32,6 @@ class WHatHALDummy(
     override fun writeDC(high: Boolean) {
     }
 
-    override fun writeChipSelect(high: Boolean) {
-    }
 
     override fun writeSpi(value: Int) {
     }
